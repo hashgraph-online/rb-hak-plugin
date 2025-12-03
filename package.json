@@ -1,0 +1,41 @@
+{
+  "name": "@hol-org/rb-hak-plugin",
+  "version": "0.1.0",
+  "description": "Hedera Agent Kit plugin exposing Registry Broker operations",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "test": "jest",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "demo:hedera-kit": "tsx demo/hedera-agent-kit-demo.ts"
+  },
+  "keywords": [
+    "hedera",
+    "agent-kit",
+    "plugin",
+    "registry-broker"
+  ],
+  "author": "Hashgraph Online",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@hashgraphonline/standards-sdk": "^0.1.139",
+    "dotenv": "^17.2.3",
+    "file-type": "^20.5.0",
+    "hedera-agent-kit": "^3.5.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@swc/jest": "^0.2.39",
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.1",
+    "@typescript-eslint/parser": "^8.48.1",
+    "eslint": "^9.39.1",
+    "jest": "^30.2.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.6",
+    "typescript": "5.6.3"
+  }
+}
