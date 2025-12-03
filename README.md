@@ -16,8 +16,6 @@ pnpm install
 pnpm run build
 ```
 
-> **Memory Note** `hedera-agent-kit` brings in a massive dependency tree (React Native + LangChain + WalletConnect). We ship `.npmrc` defaults (`node-linker=hoisted`, `node-options=--max-old-space-size=12288`) so `pnpm install` succeeds without manual tuning.
-
 ### Environment
 
 No special secrets are required for the plugin itself—whatever operator you already configure on the Hedera SDK `Client` will be reused for Registry Broker ledger auth. Just keep doing what you do for Hedera Agent Kit (e.g. `client.setOperator(...)` or `HEDERA_OPERATOR_ID/HEDERA_OPERATOR_KEY` in `.env`).
