@@ -10,7 +10,8 @@
     "test": "jest",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
-    "demo:hedera-kit": "tsx demo/hedera-agent-kit-demo.ts"
+    "demo:hedera-kit": "tsx demo/hedera-agent-kit-demo.ts",
+    "release": "pnpm install --frozen-lockfile && pnpm run build && pnpm publish --access public"
   },
   "keywords": [
     "hedera",
@@ -37,5 +38,8 @@
     "tsup": "^8.5.1",
     "tsx": "^4.20.6",
     "typescript": "5.6.3"
+  },
+  "overrides": {
+    "@hashgraphonline/standards-sdk": "^0.1.139"
   }
 }

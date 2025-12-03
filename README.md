@@ -1,6 +1,6 @@
 # Registry Broker Plugin for Hedera Agent Kit
 
-This package exposes the [Hashgraph Online Registry Broker](https://registry.hashgraphonline.com) via a Hedera Agent Kit plugin so agents can discover, chat, and register peers directly from workflows. It wraps the `RegistryBrokerClient` from `@hashgraphonline/standards-sdk` inside a Hedera-compatible plugin and tool surface.
+This package exposes the [Hashgraph Online Registry Broker](https://hol.org/registry) via a Hedera Agent Kit plugin so agents can discover, chat, and register peers directly from workflows. It wraps the `RegistryBrokerClient` from `@hashgraphonline/standards-sdk` inside a Hedera-compatible plugin and tool surface.
 
 ## Features
 
@@ -16,18 +16,19 @@ pnpm install
 pnpm run build
 ```
 
+> **Memory Note** `hedera-agent-kit` brings in a massive dependency tree (React Native + LangChain + WalletConnect). We ship `.npmrc` defaults (`node-linker=hoisted`, `node-options=--max-old-space-size=12288`) so `pnpm install` succeeds without manual tuning.
+
 ### Environment
 
-Create a local `.env` (or export variables in your shell) with the same credentials you already use to configure your Hedera Agent Kit client. The plugin inspects the `Client` instance you pass to Hedera Agent Kit and reuses its operator account + signer for registry-broker ledger authentication, so there are no duplicate `REGISTRY_BROKER_LEDGER_*` secrets to manage. If you instantiate the Hedera SDK client manually, continue calling `client.setOperator(...)` as usual and the plugin will derive the signer automatically.
+No special secrets are required for the plugin itself—whatever operator you already configure on the Hedera SDK `Client` will be reused for Registry Broker ledger auth. Just keep doing what you do for Hedera Agent Kit (e.g. `client.setOperator(...)` or `HEDERA_OPERATOR_ID/HEDERA_OPERATOR_KEY` in `.env`).
 
-Minimum environment variables (only needed when you rely on `.env` to build the Hedera client locally):
+Optional extras:
 
-- `HEDERA_OPERATOR_ID` and `HEDERA_OPERATOR_KEY` (or `HEDERA_ACCOUNT_ID` / `HEDERA_PRIVATE_KEY` as fallbacks)
-- Optional: `HEDERA_NETWORK` (`hedera:testnet` by default, `hedera:mainnet` when set)
-- Optional: `MAINNET_HEDERA_ACCOUNT_ID` / `MAINNET_HEDERA_PRIVATE_KEY` to force mainnet without flipping `HEDERA_NETWORK`
-- Optional: `OPENROUTER_API_KEY` or paid UAIDs for demos that interact with paid registries
+- `HEDERA_NETWORK` to force `hedera:mainnet` or `hedera:testnet` (defaults to testnet).
+- `MAINNET_HEDERA_ACCOUNT_ID` / `MAINNET_HEDERA_PRIVATE_KEY` if you prefer separate creds for mainnet automation.
+- `OPENROUTER_API_KEY` only when you want the demo to use a paid OpenRouter model.
 
-API keys such as `REGISTRY_BROKER_API_KEY` remain supported for non-ledger flows, and the legacy environment-based ledger auth remains available as a fallback when a Hedera client operator is not configured.
+`REGISTRY_BROKER_API_KEY` is still respected for non-ledger flows, but you rarely need it because the operator signer handles paid access automatically.
 
 ### Testing
 
@@ -87,6 +88,6 @@ The following environment variables must be available (configure them in your sh
 
 - `HEDERA_OPERATOR_ID` / `HEDERA_OPERATOR_KEY` or `MAINNET_HEDERA_ACCOUNT_ID` / `MAINNET_HEDERA_PRIVATE_KEY`
 - `HEDERA_NETWORK` (optional, defaults to `hedera:testnet`)
-- `REGISTRY_BROKER_DEMO_PAID_UAID` or `REGISTRY_BROKER_DEMO_A2A_UAID` (optional – the script automatically cycles through the provided UAIDs and finally falls back to the bundled OpenRouter UAID until one succeeds)
+- Optional: `REGISTRY_BROKER_DEMO_PAID_UAID` or `REGISTRY_BROKER_DEMO_A2A_UAID` if you want to force the demo to chat with your own UAID; by default it uses the bundled OpenRouter agent so no extra setup is required.
 
 The script logs each stage so you can verify the broker responses end-to-end.
