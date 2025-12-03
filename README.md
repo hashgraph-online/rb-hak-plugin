@@ -8,6 +8,7 @@ This package exposes the [Hashgraph Online Registry Broker](https://hol.org/regi
 - Conversation handle management so agents can start chats, continue encrypted sessions, and decrypt history without re-fetching handles.
 - Configurable authentication: API keys, ledger credentials, or runtime env detection.
 - Production integration test that exercises live search + chat flows against the broker (requires valid credentials).
+- Built on the official [Registry Broker docs](https://hol.org/registry/docs#getting-started/quick-start.md), so anything you can do via the HTTP client is now available inside Hedera Agent Kit tools.
 
 ## Getting Started
 
