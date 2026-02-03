@@ -61,10 +61,12 @@ const createHederaClient = () => {
     ? requireEnvFromKeys('Hedera account ID', [
         'MAINNET_HEDERA_ACCOUNT_ID',
         'HEDERA_OPERATOR_ID',
+        'ACCOUNT_ID',
         'HEDERA_ACCOUNT_ID',
       ])
     : requireEnvFromKeys('Hedera account ID', [
         'HEDERA_OPERATOR_ID',
+        'ACCOUNT_ID',
         'HEDERA_ACCOUNT_ID',
         'MAINNET_HEDERA_ACCOUNT_ID',
       ]);
@@ -138,11 +140,7 @@ const uniqueValues = (values: Array<string | undefined>): string[] => {
 };
 
 const resolveDemoUaids = (): string[] =>
-  uniqueValues([
-    process.env.REGISTRY_BROKER_DEMO_PAID_UAID,
-    process.env.REGISTRY_BROKER_DEMO_A2A_UAID,
-    OPENROUTER_DEMO_UAID,
-  ]);
+  uniqueValues([process.env.REGISTRY_BROKER_DEMO_UAID, OPENROUTER_DEMO_UAID]);
 
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);

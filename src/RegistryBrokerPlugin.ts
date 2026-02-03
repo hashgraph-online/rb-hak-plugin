@@ -37,7 +37,7 @@ export const createRegistryBrokerPlugin = (
   options: RegistryBrokerPluginOptions = {},
 ): Plugin => ({
   name: 'registry-broker-plugin',
-  version: '0.1.0',
+  version: '0.1.1',
   description:
     'Expose RegistryBrokerClient operations to Hedera Agent Kit tools for discovery, chat, registration, and ledger auth.',
   tools: (context: Context): Tool[] => createToolInstances(context, options),

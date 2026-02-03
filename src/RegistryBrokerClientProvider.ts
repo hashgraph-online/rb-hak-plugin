@@ -161,7 +161,7 @@ export class RegistryBrokerClientProvider {
     const operatorCredentials = this.pickLedgerEnvSet({
       accountKey: 'HEDERA_OPERATOR_ID',
       privateKey: 'HEDERA_OPERATOR_KEY',
-      fallbackAccountKey: 'HEDERA_ACCOUNT_ID',
+      fallbackAccountKey: ['ACCOUNT_ID', 'HEDERA_ACCOUNT_ID'],
       fallbackPrivateKey: 'HEDERA_PRIVATE_KEY',
       preferMainnet: false,
     });
@@ -306,16 +306,32 @@ export class RegistryBrokerClientProvider {
   private pickLedgerEnvSet(params: {
     accountKey: string;
     privateKey: string;
-    fallbackAccountKey?: string;
-    fallbackPrivateKey?: string;
+    fallbackAccountKey?: string | string[];
+    fallbackPrivateKey?: string | string[];
     preferMainnet: boolean;
   }): { accountId: string; privateKey: string; preferMainnet: boolean } | null {
+    const resolveFallback = (fallback?: string | string[]): string | undefined => {
+      if (!fallback) {
+        return undefined;
+      }
+      if (Array.isArray(fallback)) {
+        for (const key of fallback) {
+          const value = env(key);
+          if (value) {
+            return value;
+          }
+        }
+        return undefined;
+      }
+      return env(fallback);
+    };
+
     const accountId =
       env(params.accountKey) ??
-      (params.fallbackAccountKey ? env(params.fallbackAccountKey) : undefined);
+      resolveFallback(params.fallbackAccountKey);
     const privateKey =
       env(params.privateKey) ??
-      (params.fallbackPrivateKey ? env(params.fallbackPrivateKey) : undefined);
+      resolveFallback(params.fallbackPrivateKey);
     if (!accountId || !privateKey) {
       return null;
     }

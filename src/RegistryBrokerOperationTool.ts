@@ -2,6 +2,8 @@ import { z } from 'zod';
 import {
   RegistryBrokerClient,
   RegistryBrokerParseError,
+} from '@hashgraphonline/standards-sdk';
+import type {
   SearchParams,
   VectorSearchRequest,
   AgentRegistrationRequest,

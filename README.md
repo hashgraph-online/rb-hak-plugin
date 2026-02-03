@@ -1,77 +1,68 @@
 # Registry Broker Plugin for Hedera Agent Kit
 
-This package exposes the [Hashgraph Online Registry Broker](https://hol.org/registry) via a Hedera Agent Kit plugin so agents can discover, chat, and register peers directly from workflows. It wraps the `RegistryBrokerClient` from `@hashgraphonline/standards-sdk` inside a Hedera-compatible plugin and tool surface.
+| ![](./Hashgraph-Online.png) | `@hol-org/rb-hak-plugin` brings the [Hashgraph Online Registry Broker](https://hol.org/registry) directly into Hedera Agent Kit so agents can discover, chat with, and register peers from within workflows.<br><br>Built and maintained by [Hashgraph Online](https://hashgraphonline.com).<br><br>[📚 Registry Broker Quickstart](https://hol.org/registry/docs#getting-started/quick-start.md) · [📦 Standards SDK](https://hashgraphonline.com/docs/libraries/standards-sdk/) |
+| :-------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 
 ## Features
 
-- Full coverage of the Registry Broker REST API, including search, registration lifecycle, credit purchases, ledger authentication, and encryption utilities.
-- Conversation handle management so agents can start chats, continue encrypted sessions, and decrypt history without re-fetching handles.
-- Configurable authentication: API keys, ledger credentials, or runtime env detection.
-- Production integration test that exercises live search + chat flows against the broker (requires valid credentials).
-- Built on the official [Registry Broker docs](https://hol.org/registry/docs#getting-started/quick-start.md), so anything you can do via the HTTP client is now available inside Hedera Agent Kit tools.
+- Full coverage of the Registry Broker REST API (search, registration lifecycle, ledger auth, encryption helpers).
+- Seamless conversation handle management so agents can continue chats (encrypted or plaintext) without re-fetching handles.
+- Reuses the Hedera Agent Kit `Client` operator (ledger-auth only) and falls back to API keys when necessary.
+- Live integration test + Hedera Agent Kit demo that hit the production Registry Broker (no mocks).
+- Matches the [Registry Broker Quickstart](https://hol.org/registry/docs#getting-started/quick-start.md) so every HTTP capability is exposed to agents.
 
-## Getting Started
-
-```bash
-pnpm install
-pnpm run build
-```
-
-### Environment
-
-No special secrets are required for the plugin itself—whatever operator you already configure on the Hedera SDK `Client` will be reused for Registry Broker ledger auth. Just keep doing what you do for Hedera Agent Kit (e.g. `client.setOperator(...)` or `HEDERA_OPERATOR_ID/HEDERA_OPERATOR_KEY` in `.env`).
-
-Optional extras:
-
-- `HEDERA_NETWORK` to force `hedera:mainnet` or `hedera:testnet` (defaults to testnet).
-- `MAINNET_HEDERA_ACCOUNT_ID` / `MAINNET_HEDERA_PRIVATE_KEY` if you prefer separate creds for mainnet automation.
-- `OPENROUTER_API_KEY` only when you want the demo to use a paid OpenRouter model.
-
-`REGISTRY_BROKER_API_KEY` is still respected for non-ledger flows, but you rarely need it because the operator signer handles paid access automatically.
-
-### Testing
-
-Unit tests mock the broker SDK, while the integration test hits the live Hashgraph Online Registry:
+## Installation
 
 ```bash
-pnpm test              # runs unit + integration suites
-pnpm test __tests__/registry-broker-plugin.integration.test.ts
+pnpm add @hol-org/rb-hak-plugin hedera-agent-kit
 ```
 
-Set `JEST_REAL_FETCH=true` when you want to bypass the OpenRouter model stub. The integration test handles this automatically.
-
-### Linting & Types
-
-```bash
-pnpm run lint
-pnpm run typecheck
-```
-
-### Usage
+## Quickstart
 
 ```ts
-import { AgentMode, HederaLangchainToolkit } from 'hedera-agent-kit';
+import { HederaLangchainToolkit, AgentMode } from 'hedera-agent-kit';
 import {
   createRegistryBrokerPlugin,
   registryBrokerPluginToolNames,
-} from '@hashgraphonline/registry-broker-plugin';
+} from '@hol-org/rb-hak-plugin';
 
-const registryBrokerPlugin = createRegistryBrokerPlugin();
 const toolkit = new HederaLangchainToolkit({
   client,
   configuration: {
-    plugins: [registryBrokerPlugin],
+    plugins: [createRegistryBrokerPlugin()],
     tools: [registryBrokerPluginToolNames.REGISTRY_BROKER_OPERATION_TOOL],
     context: { mode: AgentMode.AUTONOMOUS },
   },
 });
 
-const tools = toolkit.getTools();
+const registryTool = toolkit.getTools().find(
+  tool => tool.name === registryBrokerPluginToolNames.REGISTRY_BROKER_OPERATION_TOOL,
+);
 ```
 
-Pass `configuration` overrides into `createRegistryBrokerPlugin({ configuration: { client: { ... }, ledger: { ... } } })` to customize API keys or provide explicit ledger credentials when you do not want to rely on the shared Hedera env vars.
+## Environment
 
-### Hedera Agent Kit Demo
+Use the same Hedera operator credentials you already provide to Hedera Agent Kit (`client.setOperator(...)` or env vars such as `HEDERA_OPERATOR_ID` / `HEDERA_OPERATOR_KEY`). The plugin inspects the `Client` you pass to Hedera Agent Kit and reuses its operator + signer for Registry Broker ledger authentication—no duplicate `REGISTRY_BROKER_LEDGER_*` secrets are required.
+
+Optional:
+
+- `HEDERA_NETWORK` (defaults to `hedera:testnet`; set `hedera:mainnet` to force mainnet).
+- `REGISTRY_BROKER_API_KEY` for API-key-only flows.
+- `REGISTRY_BROKER_DEMO_UAID` to override the default OpenRouter UAID used by the demo.
+
+If you rely on `.env` to set those values locally, create it inside this repo (never reference secrets from sibling projects).
+
+## Commands
+
+```bash
+pnpm run lint       # ESLint over src
+pnpm run typecheck  # tsc --noEmit
+pnpm test           # unit + live integration test
+pnpm demo:hedera-kit # run the Langchain demo script
+pnpm run release    # install, build, and publish with pnpm
+```
+
+## Hedera Agent Kit Demo
 
 Run the end-to-end demo to see the plugin registered with a real Hedera Agent Kit (`HederaLangchainToolkit`) instance. The script:
 
@@ -83,10 +74,10 @@ Run the end-to-end demo to see the plugin registered with a real Hedera Agent Ki
 pnpm demo:hedera-kit
 ```
 
-The following environment variables must be available (configure them in your shell or local `.env` file before running the demo):
+Required environment: `HEDERA_OPERATOR_ID` + `HEDERA_OPERATOR_KEY` (or equivalent `MAINNET_*` variables) so Hedera Agent Kit can set its operator. Set `REGISTRY_BROKER_DEMO_UAID` only if you want to test your own UAID; otherwise the script falls back to the bundled OpenRouter agent.
 
-- `HEDERA_OPERATOR_ID` / `HEDERA_OPERATOR_KEY` or `MAINNET_HEDERA_ACCOUNT_ID` / `MAINNET_HEDERA_PRIVATE_KEY`
-- `HEDERA_NETWORK` (optional, defaults to `hedera:testnet`)
-- Optional: `REGISTRY_BROKER_DEMO_PAID_UAID` or `REGISTRY_BROKER_DEMO_A2A_UAID` if you want to force the demo to chat with your own UAID; by default it uses the bundled OpenRouter agent so no extra setup is required.
+## Docs & Resources
 
-The script logs each stage so you can verify the broker responses end-to-end.
+- [Registry Broker Quickstart](https://hol.org/registry/docs#getting-started/quick-start.md)
+- [Hashgraph Online Standards SDK](https://hashgraphonline.com/docs/libraries/standards-sdk/)
+- [Hedera Agent Kit](https://github.com/hashgraph/hedera-agent-kit-js)

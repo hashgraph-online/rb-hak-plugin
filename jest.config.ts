@@ -20,7 +20,7 @@ const config: Config = {
   },
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
-    '^file-type$': '<rootDir>/../standards-sdk/__mocks__/file-type.js'
+    '^file-type$': '<rootDir>/__mocks__/file-type.ts'
   },
   extensionsToTreatAsEsm: ['.ts'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],

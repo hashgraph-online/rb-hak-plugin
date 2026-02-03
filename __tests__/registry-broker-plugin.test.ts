@@ -31,6 +31,7 @@ describe('RegistryBrokerClientProvider', () => {
     delete process.env.REGISTRY_BROKER_LEDGER_KEY;
     delete process.env.HEDERA_OPERATOR_ID;
     delete process.env.HEDERA_OPERATOR_KEY;
+    delete process.env.ACCOUNT_ID;
     delete process.env.HEDERA_ACCOUNT_ID;
     delete process.env.HEDERA_PRIVATE_KEY;
     delete process.env.MAINNET_HEDERA_ACCOUNT_ID;
@@ -193,6 +194,28 @@ describe('RegistryBrokerClientProvider', () => {
     ).toHaveBeenCalledWith(
       expect.objectContaining({
         accountId: '0.0.789',
+        network: 'hedera:testnet',
+      }),
+    );
+  });
+
+  it('accepts ACCOUNT_ID as a fallback for the Hedera operator id', async () => {
+    process.env.ACCOUNT_ID = '0.0.321';
+    process.env.HEDERA_OPERATOR_KEY = 'abcd1234';
+    const mockClient = {
+      authenticateWithLedgerCredentials: jest.fn().mockResolvedValue(undefined),
+    };
+    const provider = new RegistryBrokerClientProvider(
+      undefined,
+      logger,
+      () => mockClient as unknown as RegistryBrokerClient,
+    );
+    await provider.getClient();
+    expect(
+      mockClient.authenticateWithLedgerCredentials,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: '0.0.321',
         network: 'hedera:testnet',
       }),
     );

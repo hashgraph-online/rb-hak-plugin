@@ -63,10 +63,12 @@ const resolveLedgerCredentials = () => {
     ? requireEnvValue('Ledger account', [
         'MAINNET_HEDERA_ACCOUNT_ID',
         'HEDERA_OPERATOR_ID',
+        'ACCOUNT_ID',
         'HEDERA_ACCOUNT_ID',
       ])
     : requireEnvValue('Ledger account', [
         'HEDERA_OPERATOR_ID',
+        'ACCOUNT_ID',
         'HEDERA_ACCOUNT_ID',
         'MAINNET_HEDERA_ACCOUNT_ID',
       ]);
@@ -99,21 +101,11 @@ const createHederaClient = () => {
 };
 
 const resolveDemoUaids = (): string[] => {
-  const seen = new Set<string>();
-  const candidates = [
-    process.env.REGISTRY_BROKER_DEMO_PAID_UAID,
-    process.env.REGISTRY_BROKER_DEMO_A2A_UAID,
-    OPENROUTER_DEMO_UAID,
-  ];
-  const result: string[] = [];
-  for (const candidate of candidates) {
-    const trimmed = candidate?.trim();
-    if (trimmed && !seen.has(trimmed)) {
-      seen.add(trimmed);
-      result.push(trimmed);
-    }
+  const custom = process.env.REGISTRY_BROKER_DEMO_UAID?.trim();
+  if (custom && custom.length > 0 && custom !== OPENROUTER_DEMO_UAID) {
+    return [custom, OPENROUTER_DEMO_UAID];
   }
-  return result;
+  return [OPENROUTER_DEMO_UAID];
 };
 
 const describeError = (error: unknown): string =>
