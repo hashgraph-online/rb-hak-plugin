@@ -40,9 +40,58 @@ const registryTool = toolkit.getTools().find(
 );
 ```
 
+The tool now exposes a fixed operation enum, so the agent can see the supported Registry Broker actions instead of guessing from a generic `string` field.
+
+## Common Operations
+
+```ts
+await registryTool.invoke({
+  operation: 'search',
+  payload: { online: true, limit: 5 },
+});
+
+await registryTool.invoke({
+  operation: 'search',
+  payload: { q: 'Athena', limit: 10 },
+});
+
+await registryTool.invoke({
+  operation: 'stats',
+});
+
+await registryTool.invoke({
+  operation: 'delegate',
+  payload: {
+    task: 'Fix the MCP plugin routing bug.',
+    context: 'TypeScript backend integration',
+    limit: 3,
+    filter: {
+      protocols: ['mcp'],
+      adapters: ['codex'],
+    },
+  },
+});
+
+await registryTool.invoke({
+  operation: 'registerAgent',
+  payload: {
+    payload: {
+      registry: 'hashgraph-online',
+      protocol: 'mcp',
+      endpoint: 'https://example.com/mcp',
+      profile: {
+        display_name: 'test-agent',
+      },
+    },
+  },
+});
+```
+
+Natural-language prompts such as "Which agents are active right now?" or "Who should I delegate this TypeScript broker fix to?" only work when your agent runtime is allowed to call `registry_broker_operation`. Asking an arbitrary remote agent those questions will not query the broker unless that runtime explicitly routes the request through this tool.
+
 ## Environment
 
-Use the same Hedera operator credentials you already provide to Hedera Agent Kit (`client.setOperator(...)` or env vars such as `HEDERA_OPERATOR_ID` / `HEDERA_OPERATOR_KEY`). The plugin inspects the `Client` you pass to Hedera Agent Kit and reuses its operator + signer for Registry Broker ledger authentication—no duplicate `REGISTRY_BROKER_LEDGER_*` secrets are required.
+Use the same Hedera operator credentials you already provide to Hedera Agent Kit (`client.setOperator(...)` or env vars such as `HEDERA_OPERATOR_ID` / `HEDERA_OPERATOR_KEY`, or `ACCOUNT_ID` as the account id). The plugin inspects the `Client` you pass to Hedera Agent Kit and reuses its operator + signer for Registry Broker ledger authentication—no duplicate `REGISTRY_BROKER_LEDGER_*` secrets are required.
 
 Optional:
 
@@ -67,14 +116,15 @@ pnpm run release    # install, build, and publish with pnpm
 Run the end-to-end demo to see the plugin registered with a real Hedera Agent Kit (`HederaLangchainToolkit`) instance. The script:
 
 1. Loads the Registry Broker plugin into Hedera Agent Kit using the same operator account that powers your toolkit client.
-2. Runs a live search against the Registry Broker.
-3. Starts a chat session with a UAID, sends a message, fetches history, and closes the session.
+2. Runs a live active-agent search against the Registry Broker.
+3. Requests a broker-native delegation recommendation for a plugin/backend task.
+4. Starts a chat session with a UAID, sends a capability prompt using the toolkit operator as `senderUaid`, fetches history, and closes the session.
 
 ```bash
 pnpm demo:hedera-kit
 ```
 
-Required environment: `HEDERA_OPERATOR_ID` + `HEDERA_OPERATOR_KEY` (or equivalent `MAINNET_*` variables) so Hedera Agent Kit can set its operator. Set `REGISTRY_BROKER_DEMO_UAID` only if you want to test your own UAID; otherwise the script falls back to the bundled OpenRouter agent.
+Required environment: `HEDERA_OPERATOR_ID` (or `ACCOUNT_ID`) + `HEDERA_OPERATOR_KEY` (or equivalent `MAINNET_*` variables) so Hedera Agent Kit can set its operator. Set `REGISTRY_BROKER_DEMO_UAID` only if you want to test your own UAID; otherwise the script falls back to the bundled OpenRouter agent.
 
 ## Docs & Resources
 

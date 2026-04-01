@@ -6,6 +6,7 @@ import {
 import type {
   SearchParams,
   VectorSearchRequest,
+  JsonValue,
   AgentRegistrationRequest,
   RegisterAgentOptions,
   LedgerChallengeRequest,
@@ -35,6 +36,11 @@ import type {
   RegistryBrokerClientProvider,
 } from './RegistryBrokerClientProvider';
 import { RegistryBrokerConversationStore } from './RegistryBrokerConversationStore';
+import {
+  registryBrokerOperationNames,
+  registryBrokerPayloadDescription,
+  registryBrokerToolDescription,
+} from './operation-metadata';
 
 const nonEmptyString = (label: string): z.ZodString =>
   z
@@ -79,12 +85,40 @@ type RegistryBrokerInputSchema = z.ZodObject<
 >;
 
 const registryBrokerInputSchema: RegistryBrokerInputSchema = z.object({
-  operation: z.string(),
-  payload: z.unknown().optional(),
+  operation: z.enum(registryBrokerOperationNames),
+  payload: z.unknown().describe(registryBrokerPayloadDescription).optional(),
 });
 type RegistryBrokerToolInput = {
-  operation: string;
+  operation: (typeof registryBrokerOperationNames)[number];
   payload?: unknown;
+};
+
+type DelegateRequest = {
+  task: string;
+  context?: string;
+  workspace?: Record<string, unknown>;
+  filter?: Record<string, unknown>;
+  limit?: number;
+};
+
+type ChatSendMessagePayload = SendMessageRequestPayload & {
+  senderUaid?: string;
+};
+
+type DelegateCapableRegistryBrokerClient = RegistryBrokerClient & {
+  delegate: (request: DelegateRequest) => Promise<unknown>;
+};
+
+type RegisterStatusCapableRegistryBrokerClient = RegistryBrokerClient & {
+  getRegisterStatus: (uaid: string) => Promise<unknown>;
+};
+
+type EncryptionCapableRegistryBrokerClient = RegistryBrokerClient & {
+  encryption: {
+    encryptCipherEnvelope: (
+      options: EncryptCipherEnvelopeOptions,
+    ) => unknown;
+  };
 };
 
 type OperationPath = string;
@@ -167,8 +201,7 @@ export class RegistryBrokerOperationTool {
     return {
       method: REGISTRY_BROKER_OPERATION_TOOL_NAME,
       name: 'Registry Broker Operation',
-      description:
-        'Invoke registry-broker client methods (search, chat, registry lifecycle, ledger auth, encryption).',
+      description: registryBrokerToolDescription,
       parameters: registryBrokerInputSchema,
       execute: async (hederaClient, agentContext, input) =>
         this.execute({
@@ -190,6 +223,31 @@ export class RegistryBrokerOperationTool {
       if (CONVERSATION_OPERATIONS.has(parsedInput.operation)) {
         const result = await this.handleConversationOperation(parsedInput);
         return this.wrapResult(parsedInput.operation, result);
+      }
+      if (parsedInput.operation === 'delegate') {
+        const delegated = await this.handleDelegate(parsedInput.payload, hederaClient);
+        return this.wrapResult(parsedInput.operation, delegated);
+      }
+      if (parsedInput.operation === 'getRegisterStatus') {
+        const status = await this.handleGetRegisterStatus(
+          parsedInput.payload,
+          hederaClient,
+        );
+        return this.wrapResult(parsedInput.operation, status);
+      }
+      if (parsedInput.operation === 'updateAgent') {
+        const updated = await this.handleUpdateAgent(
+          parsedInput.payload,
+          hederaClient,
+        );
+        return this.wrapResult(parsedInput.operation, updated);
+      }
+      if (parsedInput.operation === 'chat.sendMessage') {
+        const message = await this.handleChatSendMessage(
+          parsedInput.payload,
+          hederaClient,
+        );
+        return this.wrapResult(parsedInput.operation, message);
       }
       if (parsedInput.operation === 'initializeAgent') {
         const initialised = await this.handleInitializeAgent(parsedInput.payload);
@@ -297,6 +355,137 @@ export class RegistryBrokerOperationTool {
     };
   }
 
+  private async handleDelegate(
+    payload: unknown,
+    hederaClient?: HederaOperatorClient,
+  ): Promise<unknown> {
+    const parsed = delegateSchema.parse(payload ?? {});
+    const client = await this.clientProvider.getClient({ hederaClient });
+    if (this.hasNativeDelegate(client)) {
+      return client.delegate(parsed);
+    }
+    return client.requestJson<JsonValue>('/delegate', {
+      method: 'POST',
+      body: parsed,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  private async handleGetRegisterStatus(
+    payload: unknown,
+    hederaClient?: HederaOperatorClient,
+  ): Promise<unknown> {
+    const parsed = registerStatusSchema.parse(payload ?? {});
+    const client = await this.clientProvider.getClient({ hederaClient });
+    if (this.hasNativeRegisterStatus(client)) {
+      return client.getRegisterStatus(parsed.uaid);
+    }
+    return client.requestJson<JsonValue>(
+      `/register/status/${encodeURIComponent(parsed.uaid)}`,
+      { method: 'GET' },
+    );
+  }
+
+  private async handleUpdateAgent(
+    payload: unknown,
+    hederaClient?: HederaOperatorClient,
+  ): Promise<unknown> {
+    const parsed = updateAgentSchema.parse(payload ?? {});
+    const client = await this.clientProvider.getClient({ hederaClient });
+    return client.requestJson<JsonValue>(
+      `/register/${encodeURIComponent(parsed.uaid)}`,
+      {
+        method: 'PUT',
+        body: parsed.request,
+        headers: { 'content-type': 'application/json' },
+      },
+    );
+  }
+
+  private async handleChatSendMessage(
+    payload: unknown,
+    hederaClient?: HederaOperatorClient,
+  ): Promise<unknown> {
+    const parsed = sendMessageSchema.parse(payload ?? {});
+    const client = await this.clientProvider.getClient({ hederaClient });
+    const body: Record<string, unknown> = {
+      message: parsed.message,
+    };
+    if (parsed.streaming !== undefined) {
+      body.streaming = parsed.streaming;
+    }
+    if (parsed.auth) {
+      body.auth = parsed.auth;
+    }
+    if ('uaid' in parsed && parsed.uaid) {
+      body.uaid = parsed.uaid;
+    }
+    if ('sessionId' in parsed && parsed.sessionId) {
+      body.sessionId = parsed.sessionId;
+    }
+    if ('agentUrl' in parsed && parsed.agentUrl) {
+      body.agentUrl = parsed.agentUrl;
+    }
+    if (parsed.senderUaid) {
+      body.senderUaid = parsed.senderUaid;
+    }
+    let cipherEnvelope = parsed.cipherEnvelope ?? null;
+    if (parsed.encryption) {
+      const sessionId =
+        parsed.encryption.sessionId ??
+        (typeof body.sessionId === 'string' ? body.sessionId : undefined);
+      if (!sessionId) {
+        throw new Error(
+          'sessionId is required when using encrypted chat payloads',
+        );
+      }
+      if (!parsed.encryption.recipients?.length) {
+        throw new Error('recipients are required for encrypted chat payloads');
+      }
+      const encryptionClient = this.getEncryptionClient(client);
+      cipherEnvelope = encryptionClient.encryption.encryptCipherEnvelope({
+        ...parsed.encryption,
+        sessionId,
+      });
+    }
+    if (cipherEnvelope) {
+      body.cipherEnvelope = JSON.parse(JSON.stringify(cipherEnvelope)) as
+        | Record<string, unknown>
+        | unknown[];
+    }
+    return client.requestJson<JsonValue>('/chat/message', {
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  private hasNativeDelegate(
+    client: RegistryBrokerClient,
+  ): client is DelegateCapableRegistryBrokerClient {
+    return typeof Reflect.get(client, 'delegate') === 'function';
+  }
+
+  private hasNativeRegisterStatus(
+    client: RegistryBrokerClient,
+  ): client is RegisterStatusCapableRegistryBrokerClient {
+    return typeof Reflect.get(client, 'getRegisterStatus') === 'function';
+  }
+
+  private getEncryptionClient(
+    client: RegistryBrokerClient,
+  ): EncryptionCapableRegistryBrokerClient {
+    const encryption = Reflect.get(client, 'encryption');
+    if (
+      encryption &&
+      typeof Reflect.get(encryption as object, 'encryptCipherEnvelope') ===
+        'function'
+    ) {
+      return client as EncryptionCapableRegistryBrokerClient;
+    }
+    throw new Error('Client encryption helpers are unavailable');
+  }
+
   private resolveTarget(
     client: RegistryBrokerClient,
     path: string,
@@ -379,9 +568,21 @@ const conversationReleaseSchema = z.object({
 const vectorSearchSchema =
   objectLike<VectorSearchRequest>('vectorSearchRequest');
 
+const delegateSchema = z.object({
+  task: nonEmptyString('task'),
+  context: z.string().optional(),
+  workspace: objectLike<Record<string, unknown>>('workspace').optional(),
+  filter: objectLike<Record<string, unknown>>('filter').optional(),
+  limit: z.number().int().positive().max(5).optional(),
+});
+
 const registerAgentSchema = z.object({
   payload: objectLike<AgentRegistrationRequest>('registerAgentPayload'),
   options: objectLike<RegisterAgentOptions>('registerAgentOptions').optional(),
+});
+
+const registerStatusSchema = z.object({
+  uaid: nonEmptyString('uaid'),
 });
 
 const updateAgentSchema = z.object({
@@ -416,7 +617,7 @@ const createSessionSchema =
   objectLike<CreateSessionRequestPayload>('createSessionPayload');
 
 const sendMessageSchema =
-  objectLike<SendMessageRequestPayload>('sendMessagePayload');
+  objectLike<ChatSendMessagePayload>('sendMessagePayload');
 
 const chatHistorySchema = z.object({
   sessionId: nonEmptyString('sessionId'),
@@ -486,6 +687,11 @@ const initializeAgentSchema =
   objectLike<InitializeAgentClientOptions>('initializeAgentOptions');
 
 const OPERATION_DEFINITIONS: Record<string, OperationDefinition> = {
+  delegate: {
+    type: 'custom',
+    schema: delegateSchema,
+    handler: async () => null,
+  },
   stats: noArgs('stats'),
   registries: noArgs('registries'),
   getAdditionalRegistries: noArgs('getAdditionalRegistries'),
@@ -532,14 +738,16 @@ const OPERATION_DEFINITIONS: Record<string, OperationDefinition> = {
     'getRegistrationQuote',
     objectLike<AgentRegistrationRequest>('getRegistrationQuotePayload'),
   ),
-  updateAgent: tupleArg(
-    'updateAgent',
-    updateAgentSchema,
-    (payload: z.infer<typeof updateAgentSchema>) => [
-      payload.uaid,
-      payload.request,
-    ],
-  ),
+  updateAgent: {
+    type: 'custom',
+    schema: updateAgentSchema,
+    handler: async () => null,
+  },
+  getRegisterStatus: {
+    type: 'custom',
+    schema: registerStatusSchema,
+    handler: async () => null,
+  },
   getRegistrationProgress: stringArg(
     'getRegistrationProgress',
     'attemptId',
@@ -591,7 +799,11 @@ const OPERATION_DEFINITIONS: Record<string, OperationDefinition> = {
   ),
   'chat.start': objectArg('chat.start', startChatSchema),
   'chat.createSession': objectArg('chat.createSession', createSessionSchema),
-  'chat.sendMessage': objectArg('chat.sendMessage', sendMessageSchema),
+  'chat.sendMessage': {
+    type: 'custom',
+    schema: sendMessageSchema,
+    handler: async () => null,
+  },
   'chat.endSession': stringArg('chat.endSession', 'sessionId'),
   'chat.getHistory': tupleArg(
     'chat.getHistory',

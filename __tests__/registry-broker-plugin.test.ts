@@ -289,10 +289,105 @@ describe('RegistryBrokerOperationTool', () => {
     expect(provider.getClient).toHaveBeenCalledWith({ hederaClient });
   });
 
-  it('handles registerAgent and updateAgent payload mapping', async () => {
+  it('uses the native client delegate method when the SDK exposes it', async () => {
+    const client = {
+      delegate: jest.fn().mockResolvedValue({
+        shouldDelegate: true,
+        recommendation: { action: 'delegate-now' },
+      }),
+      requestJson: jest.fn(),
+      chat: {
+        createSession: jest.fn(),
+        start: jest.fn(),
+      },
+      encryption: {},
+    };
+    const { tool, provider } = createTool(client);
+    const hederaClient = createHederaClientStub();
+    const delegateResult = await invokeTool(
+      tool,
+      {
+        operation: 'delegate',
+        payload: {
+          task: 'Fix the MCP plugin routing bug.',
+          context: 'TypeScript backend',
+          limit: 3,
+          filter: {
+            protocols: ['mcp'],
+            adapters: ['codex'],
+          },
+        },
+      },
+      hederaClient,
+    );
+
+    expect(client.delegate).toHaveBeenCalledWith({
+      task: 'Fix the MCP plugin routing bug.',
+      context: 'TypeScript backend',
+      limit: 3,
+      filter: {
+        protocols: ['mcp'],
+        adapters: ['codex'],
+      },
+    });
+    expect(client.requestJson).not.toHaveBeenCalled();
+    expect(delegateResult.success).toBe(true);
+    expect(provider.getClient).toHaveBeenCalledWith({ hederaClient });
+  });
+
+  it('falls back to the broker delegate endpoint when the SDK build lacks delegate()', async () => {
+    const client = {
+      requestJson: jest.fn().mockResolvedValue({
+        shouldDelegate: true,
+        recommendation: { action: 'delegate-now' },
+      }),
+      chat: {
+        createSession: jest.fn(),
+        start: jest.fn(),
+      },
+      encryption: {},
+    };
+    const { tool, provider } = createTool(client);
+    const hederaClient = createHederaClientStub();
+    const delegateResult = await invokeTool(
+      tool,
+      {
+        operation: 'delegate',
+        payload: {
+          task: 'Fix the MCP plugin routing bug.',
+          context: 'TypeScript backend',
+          limit: 3,
+          filter: {
+            protocols: ['mcp'],
+            adapters: ['codex'],
+          },
+        },
+      },
+      hederaClient,
+    );
+
+    expect(client.requestJson).toHaveBeenCalledWith('/delegate', {
+      method: 'POST',
+      body: {
+        task: 'Fix the MCP plugin routing bug.',
+        context: 'TypeScript backend',
+        limit: 3,
+        filter: {
+          protocols: ['mcp'],
+          adapters: ['codex'],
+        },
+      },
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(delegateResult.success).toBe(true);
+    expect(provider.getClient).toHaveBeenCalledWith({ hederaClient });
+  });
+
+  it('handles registerAgent, getRegisterStatus, and updateAgent payload mapping', async () => {
     const client = {
       registerAgent: jest.fn().mockResolvedValue({ success: true }),
-      updateAgent: jest.fn().mockResolvedValue({ success: true }),
+      getRegisterStatus: jest.fn().mockResolvedValue({ registered: true }),
+      requestJson: jest.fn().mockResolvedValue({ success: true }),
       chat: { start: jest.fn(), createSession: jest.fn() },
       encryption: {},
     };
@@ -310,12 +405,81 @@ describe('RegistryBrokerOperationTool', () => {
       { autoTopUp: { accountId: '0.0.1', privateKey: '302' } },
     );
     await invokeTool(tool, {
+      operation: 'getRegisterStatus',
+      payload: { uaid: 'uaid:test' },
+    }, hederaClient);
+    expect(client.getRegisterStatus).toHaveBeenCalledWith('uaid:test');
+    await invokeTool(tool, {
       operation: 'updateAgent',
       payload: { uaid: 'uaid:test', request: { endpoint: 'https://example.com' } },
     }, hederaClient);
-    expect(client.updateAgent).toHaveBeenCalledWith('uaid:test', {
-      endpoint: 'https://example.com',
+    expect(client.requestJson).toHaveBeenCalledWith(
+      '/register/uaid%3Atest',
+      {
+        method: 'PUT',
+        body: { endpoint: 'https://example.com' },
+        headers: { 'content-type': 'application/json' },
+      },
+    );
+    expect(provider.getClient).toHaveBeenCalledWith({ hederaClient });
+  });
+
+  it('falls back to the broker register status endpoint when the SDK build lacks getRegisterStatus()', async () => {
+    const client = {
+      requestJson: jest.fn().mockResolvedValue({ registered: true }),
+      chat: { start: jest.fn(), createSession: jest.fn() },
+      encryption: {},
+    };
+    const { tool, provider } = createTool(client);
+    const hederaClient = createHederaClientStub();
+    const result = await invokeTool(tool, {
+      operation: 'getRegisterStatus',
+      payload: { uaid: 'uaid:test' },
+    }, hederaClient);
+    expect(client.requestJson).toHaveBeenCalledWith(
+      '/register/status/uaid%3Atest',
+      { method: 'GET' },
+    );
+    expect(result.success).toBe(true);
+    expect(provider.getClient).toHaveBeenCalledWith({ hederaClient });
+  });
+
+  it('sends chat messages through the broker endpoint so senderUaid survives older SDK builds', async () => {
+    const client = {
+      requestJson: jest.fn().mockResolvedValue({
+        messageId: 'msg-1',
+        message: 'READY',
+      }),
+      chat: {
+        start: jest.fn(),
+        createSession: jest.fn(),
+        sendMessage: jest.fn(),
+      },
+      encryption: {
+        encryptCipherEnvelope: jest.fn(),
+      },
+    };
+    const { tool, provider } = createTool(client);
+    const hederaClient = createHederaClientStub();
+    const result = await invokeTool(tool, {
+      operation: 'chat.sendMessage',
+      payload: {
+        sessionId: 'session-1',
+        message: 'READY',
+        senderUaid: 'principal:ledger:0.0.123',
+      },
+    }, hederaClient);
+    expect(client.requestJson).toHaveBeenCalledWith('/chat/message', {
+      method: 'POST',
+      body: {
+        sessionId: 'session-1',
+        message: 'READY',
+        senderUaid: 'principal:ledger:0.0.123',
+      },
+      headers: { 'content-type': 'application/json' },
     });
+    expect(client.chat.sendMessage).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
     expect(provider.getClient).toHaveBeenCalledWith({ hederaClient });
   });
 
@@ -404,5 +568,37 @@ describe('RegistryBrokerPlugin', () => {
     expect(
       tools.find(tool => tool.method === REGISTRY_BROKER_OPERATION_TOOL_NAME),
     ).toBeDefined();
+  });
+
+  it('rejects unsupported operation names at schema validation time', () => {
+    const plugin = createRegistryBrokerPlugin({ logger: createLogger() });
+    const tools = plugin.tools({});
+    const registryTool = tools.find(
+      tool => tool.method === REGISTRY_BROKER_OPERATION_TOOL_NAME,
+    );
+
+    expect(registryTool).toBeDefined();
+    expect(
+      registryTool?.parameters.safeParse({
+        operation: 'not-a-real-operation',
+        payload: {},
+      }).success,
+    ).toBe(false);
+    expect(
+      registryTool?.parameters.safeParse({
+        operation: 'search',
+        payload: { q: 'Athena', online: true, limit: 5 },
+      }).success,
+    ).toBe(true);
+    expect(
+      registryTool?.parameters.safeParse({
+        operation: 'delegate',
+        payload: {
+          task: 'Find the best delegate for a TypeScript routing bug.',
+          context: 'Codex plugin integration',
+          limit: 3,
+        },
+      }).success,
+    ).toBe(true);
   });
 });
