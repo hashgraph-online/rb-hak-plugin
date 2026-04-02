@@ -24,11 +24,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
           scope: '@hol-org'
           cache: 'pnpm'
           always-auth: true
+
+      - name: Setup npm
+        run: npm install --global npm@11.6.2
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -40,4 +43,4 @@ jobs:
         run: pnpm run build
 
       - name: Publish
-        run: pnpm publish --access public --no-git-checks --provenance
+        run: npm publish --access public --provenance
